@@ -4,6 +4,7 @@
 import base64
 import json
 import logging
+import os
 import re
 import smtplib
 import socket
@@ -53,10 +54,11 @@ COMMANDS = (
 
 class SMTP_Proxy:
 
-    def __init__(self, port=None, host='', certfile=None, key=DEFAULT_KEY, max_client=MAX_CLIENT, verbose=False,
+    def __init__(self, port=None, host='', certfile=None, keyfile=None, key=DEFAULT_KEY, max_client=MAX_CLIENT, verbose=False,
                  ipv6=False):
         self.verbose = verbose
         self.certfile = certfile
+        self.keyfile = keyfile
         self.key = key
         self.logger = logging.getLogger("smtpServer")
 
@@ -81,7 +83,7 @@ class SMTP_Proxy:
             try:
                 ssock, addr = self.sock.accept()
                 if self.certfile:  # Add SSL/TLS
-                    ssock = ssl.wrap_socket(ssock, certfile=self.certfile, server_side=True)
+                    ssock = ssl.wrap_socket(ssock, certfile=self.certfile, keyfile=self.keyfile, server_side=True, do_handshake_on_connect=False)
 
                 # Connect the proxy with the client
                 threading.Thread(target=self.new_connection, args=(ssock,)).start()
@@ -169,14 +171,21 @@ class Connection:
             self.recv_from_server()
             self.send_to_server('DATA')
             self.recv_from_server()
-            response = requests.post("https://localhost:8071/makeKey", verify="cert.pem",
-                                     data={'userFrom': self.mailFrom, 'userTo': rcpt})
+            response = requests.post(os.getenv('URL_TICKETER') + "/makeKey", data={'userFrom': self.mailFrom, 'userTo': rcpt})
             jsonText = response.json()
             key = jsonText['key']
             uid = jsonText['uid']
             fernet = Fernet(key)
             forenc = text.split('\r\n.')[0]
+            subject = re.findall(r'(?<=Subject: ).*(?=\r\n)', headers)
+            if subject:
+                subject = "Subject: " + subject[0] + "\n"
+                headers = re.sub(r'(?<=Subject: )(.*(\r\n)*)*(?=.*)', "Secret subject", headers)
+            else:
+                subject = ""
+            forenc = forenc + subject
             eeenc = fernet.encrypt(str(forenc).encode()).decode("utf-8")
+
             headers = re.sub(r'(?<=To: )(.*(\r\n)*)*(?=.*)', rcpt.split('@')[0] + ' <' + rcpt + '>', headers)
             exuid = re.findall(r'(?<=UID: ).*', headers)
             if not exuid:
@@ -269,7 +278,7 @@ class Connection:
         access = False
         username = busername.decode()
         password = bpassword.decode()
-        with open('access.json') as file:
+        with open(os.getcwd() + '\\smtpserver\\access.json') as file:
             data = file.read()
             for user in json.loads(data)['emails']:
                 if user == username:
@@ -365,4 +374,4 @@ class Connection:
         return text
 
 
-SMTP_Proxy(port=588)
+SMTP_Proxy(port=25)

@@ -102,12 +102,13 @@ def process_email(username, id, conn_server, folder, uidc, logger):  # todo deco
     headers = stringm.split('\n\n')[0]
     body = ''.join(stringm.split('\n\n')[1].split('\n.')[0].split('\r\n'))
     body = body.replace('\n', '')
+    body = body.replace('\n', '')
     data = mail.get_payload()
     userFrom = ''.join(re.findall(r'(?<=<).*(?=>)', mail['From']))
     uid = mail['UID']
     if not uid:
         return False
-    response = requests.post("https://localhost:8071/getKey", verify="cert.pem", data={'userTo': username, 'userFrom': userFrom, 'uid': uid})
+    response = requests.post(os.getenv('URL_TICKETER' + "/getKey"), data={'userTo': username, 'userFrom': userFrom, 'uid': uid})
     key = response.text
     if key.find('HTML') != -1:
         return False
@@ -117,10 +118,21 @@ def process_email(username, id, conn_server, folder, uidc, logger):  # todo deco
         if isinstance(data, list):
             for part in data:
                 payload = part.get_payload()
-                part.set_payload(str(fernet.decrypt(payload.encode()), 'utf-8'))
+                decryptt = str(fernet.decrypt(payload.encode()), 'utf-8')
+                subject = re.findall(r'(?<=Subject: ).*(?=\n)', decryptt)
+                if subject:
+                    headers = re.sub(r'(?<=Subject: ).*(?=\n)', subject, headers)
+                    decryptt = re.sub(r'Subject: .*\n', "", decryptt)
+                part.set_payload(decryptt)
             mail.set_payload(data)
         else:
             decryptt = str(fernet.decrypt(body.encode()), 'utf-8')
+            #subject = re.findall(r'(?<=Subject: ).*(?=\n)', headers)
+            #body = re.sub(r'Subject: .*', "", body)
+            subject = re.findall(r'(?<=Subject: ).*(?=\n)', decryptt)
+            if subject:
+                headers = re.sub(r'(?<=Subject: ).*(?=\n)', subject[0], headers)
+                decryptt = re.sub(r'Subject: .*\n', "", decryptt)
             mail = email.message_from_string(headers + '\r\n\r\n' + decryptt)
     except:
         logger.error("Error of decrypting, uid - " + uid)

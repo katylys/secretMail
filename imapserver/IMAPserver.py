@@ -2,14 +2,14 @@ import base64
 import imaplib
 import json
 import logging
+import os
 import re
 import socket
 import ssl
 import threading
-
-from helper import process as pycircleanmail_module
-
 # Default key to verify integrity of emails modified by the proxy
+from imapserver.helper import process
+
 DEFAULT_KEY = 'secret-proxy'
 
 # Default maximum number of client supported by the proxy
@@ -98,10 +98,11 @@ class IMAP_Proxy:
     secured connections) for each new client. These socket connections are asynchronous and non-blocking.
     """
 
-    def __init__(self, port=None, host='', certfile=None, key=DEFAULT_KEY, max_client=MAX_CLIENT, verbose=False,
+    def __init__(self, port=None, host='', certfile=None, keyfile=None, key=DEFAULT_KEY, max_client=MAX_CLIENT, verbose=False,
                  ipv6=False):
         self.verbose = verbose
         self.certfile = certfile
+        self.keyfile = keyfile
         self.key = key
         self.logger = logging.getLogger("imapServer")
 
@@ -126,7 +127,7 @@ class IMAP_Proxy:
             try:
                 ssock, addr = self.sock.accept()
                 if self.certfile:  # Add SSL/TLS
-                    ssock = ssl.wrap_socket(ssock, certfile=self.certfile, server_side=True)
+                    ssock = ssl.wrap_socket(ssock, certfile=self.certfile, keyfile=self.keyfile, server_side=True)
 
                 # Connect the proxy with the client
                 threading.Thread(target=self.new_connection, args=(ssock,)).start()
@@ -291,7 +292,7 @@ class Connection:
         (empty, busername, bpassword) = base64.b64decode(request).split(b'\x00')
         username = busername.decode()
         password = bpassword.decode()
-        with open('access.json') as file:
+        with open(os.getcwd() + '\\imapserver\\access.json') as file:
             data = file.read()
             for user in json.loads(data)['emails']:
                 if user == username:
@@ -344,7 +345,7 @@ class Connection:
 
     def fetch(self):
         """ Fetch an email """
-        pycircleanmail_module(self)
+        process(self)
         self.transmit()
 
     def move(self):
@@ -368,6 +369,7 @@ class Connection:
 
     def send_to_client(self, str_data):
         """ Send String data (without CRLF) to the client """
+        #print(str_data)
         self.logger.info(str_data)
         b_data = str_data.encode('utf-8', 'replace') + CRLF  # todo check
         self.conn_client.send(b_data)
@@ -416,3 +418,5 @@ class Connection:
         if text.startswith('"') and text.endswith('"'):
             text = text[1:-1]
         return text
+
+IMAP_Proxy(port=143)
