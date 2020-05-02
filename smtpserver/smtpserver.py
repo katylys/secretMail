@@ -171,7 +171,7 @@ class Connection:
             self.recv_from_server()
             self.send_to_server('DATA')
             self.recv_from_server()
-            response = requests.post(os.getenv('URL_TICKETER') + "/makeKey", data={'userFrom': self.mailFrom, 'userTo': rcpt})
+            response = requests.post("http://217.73.60.165:2680/makeKey", data={'userFrom': self.mailFrom, 'userTo': rcpt})
             jsonText = response.json()
             key = jsonText['key']
             uid = jsonText['uid']
