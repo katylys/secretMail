@@ -108,7 +108,7 @@ def process_email(username, id, conn_server, folder, uidc, logger):  # todo deco
     uid = mail['UID']
     if not uid:
         return False
-    response = requests.post(os.getenv('URL_TICKETER' + "/getKey"), data={'userTo': username, 'userFrom': userFrom, 'uid': uid})
+    response = requests.post(os.getenv('URL_TICKETER') + "/getKey", data={'userTo': username, 'userFrom': userFrom, 'uid': uid})
     key = response.text
     if key.find('HTML') != -1:
         return False
